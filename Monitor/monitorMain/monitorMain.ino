@@ -69,7 +69,7 @@ void loop() {
   objWeight = 0;                          // Limpa valor de leitura de peso para objeto
 
   // Verifica Sensor Presença
-  detectedObject = digitelRead(infraPin); // Atualiza estado de presença de objeto
+  detectedObject = digitalRead(infraPin); // Atualiza estado de presença de objeto
   // Se dectectado um objeto
   if(detectedObject == LOW) {
     // Acende Led extra de presença de objeto
@@ -85,7 +85,7 @@ void loop() {
   }
 
   // Se conectado ao WiFi
-  if(Wifi.status() == WL_CONNECTED) {
+  if(WiFi.status() == WL_CONNECTED) {
       // Cria um cliente TCP
       WiFiClient client;
       // Conecta-se ao cliente TCP
