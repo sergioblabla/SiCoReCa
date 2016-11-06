@@ -93,8 +93,8 @@ void loop() {
       if(client.connect(serverIP, serverPort)) {
         // Envia msg com informações do pacote à central
         client.print(latestObj + ":" 
-                    + weight + ":" 
-                    + (notSent-1));
+                    + weight /*+ ":" 
+                    + (notSent-1)*/);
         
         unsigned long timeout = millis();
         bool timeoutClient = false;
