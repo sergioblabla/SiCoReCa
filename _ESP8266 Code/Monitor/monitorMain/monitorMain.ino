@@ -1,13 +1,12 @@
-#include <WiFi.h>
+#include <ESP8266WiFi.h>
 #include <HX711.h>
 #include <Time.h>
 
-// Wifi Parâmetros & Shield WiFi
-const char* serverIp = "192.168.0.177";
-const int serverPort = 23;
-const char* ssid = "SiCoReCa";            // SSID da rede Wifi
-const char* password = "A11iS0n3G0st0s0"; // Senha da rede Wifi
-int state = WL_IDLE_STATUS;               // Auxiliar para estado da rede
+// Wifi Parâmetros & Módulo ESP8266
+const char* serverIp = "192.0.0.1";
+const int serverPort = 8080;
+const char* ssid = "service-set-identifier";  // SSID da rede Wifi
+const char* password = "network-password";    // Senha da rede Wifi
 
 // Detecção de Presença & Sensor de Infravermelho
 int extraLedPin = 8;    // Pino onde o LED extra de feedback está conectado
@@ -26,20 +25,6 @@ time_t latestObj = -1;  // Timestamp do último objeto monitorado
 void setup() {
   // put your setup code here, to run once:
 
-  // Inicializa Serial
-  Serial.begin(9600);
-  
-  // Verifica presença do shield WiFi
-  if (WiFi.status() == WL_NO_SHIELD) {
-    Serial.println("Shield WiFi não presente);
-    while(true);
-  }
-
-  // Conexão à rede WiFi
-  while(status != WL_CONNECTED) {
-    status = WiFi.begin(ssid, password);
-  }
-  
   // Inicialização do sensor de infravermelho e LED extra
   pinMode(extraLedPin, OUTPUT);   // Definição do pino de LED como saída
   pinMode(infraPin, INPUT);       // Definição do pino do sensor como entrada
@@ -50,6 +35,9 @@ void setup() {
   digitalWrite(hxSCK, HIGH);      // Reset do módulo HX711
   delay(200);
   digitalWrite(hxSCK, LOW);
+
+  // Conexão à rede WiFi
+  WiFi.begin(ssid, password);  
 }
 
 // Leitura do peso
@@ -97,7 +85,7 @@ void loop() {
   }
 
   // Se conectado ao WiFi
-  if(status == WL_CONNECTED) {
+  if(WiFi.status() == WL_CONNECTED) {
       // Cria um cliente TCP
       WiFiClient client;
       // Conecta-se ao cliente TCP
@@ -143,7 +131,7 @@ void loop() {
       }
   } else {
     // Se não conectado ao WiFi
-    status = WiFi.begin(ssid, password);  
+    WiFi.begin(ssid, password);  
   }
   
   delay(500);

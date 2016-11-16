@@ -1,5 +1,5 @@
 #include <SPI.h>
-#include <WiFi.h>
+#include <Ethernet.h>
 #include <Thread.h>
 #include <ThreadController.h>
 #include <Time.h>
@@ -10,11 +10,11 @@
 #define delaySinceMonitored 0.5 // Tempo do momento em que o pacote é monitorado até que a msg sobre ele chega ao módulo central
 
 // Server & Internet Parâmetros
-IPAddress myIp(192.168.0.177);            // Endereço IP para o shield/módulo
-const char mySSID[] = "SiCoReCa";         // Nome da rede para o shield/módulo
-const char myPASS[] = "A11iS0n3G0st0s0";  // Senha da rede para o shield/módulo
-int state = WL_IDLE_STATUS;               // Auxiliar para estado da rede
-WiFiServer server(23);                    // Porta para a rede
+const byte myMac[] = {0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED}; // Controle de acesso à mídia (hardware ethernet) endereço para o módulo/shield
+const byte myIp[] = {10, 0, 0, 177};                       // Endereço IP para o shield/módulo
+EthernetServer myPort = EthernetServer(23);                // Porta do Servidor do Arduino
+const byte gateway[] = {10, 0, 0, 1};                      // Endereço Gateway do Roteador
+const byte subnet[] = {255, 255, 0, 0};                    // Máscara de Sub-rede
 
 // Cache de Msgs de Monitor
 int nMaxMsgs = 10;            // Limite máximo de Msgs no Cache Central
@@ -157,24 +157,12 @@ void setup() {
 
   // Inicializa valores na Cache
   initializeCache();
+  
+  // Conexão à rede Ethernet
+  Ethernet.begin(myMac, myIp, gateway, subnet);  
 
-  // Inicializa Serial
-  Serial.begin(9600);
-  
-  // Verifica presença do shield WiFi
-  if (WiFi.status() == WL_NO_SHIELD) {
-    Serial.println("Shield WiFi não presente);
-    while(true);
-  }
-  
-  // Configura rede WiFi
-  WiFi.config(myIp);
-  
-  // Inicia rede WiFi
-  while(status != WL_CONNECTED) {
-    status = WiFi.begin(mySSID, myPASS);
-  }
-  server.begin();
+  // Inicialização do Servidor
+  myPort.begin();
   
   // Inicialização da Paralelização e Controle de Thread
   decisionThread.setInterval(1000);
@@ -189,7 +177,7 @@ void loop() {
   parallelCtr.run();
 
   // Escuta o meio para msgs de Clientes
-  WiFiClient client = server.available();
+  EthernetClient client = myPort.available();
 
   // Verifica conexão estabelecida por Cliente
   if (client == true) {
@@ -198,9 +186,6 @@ void loop() {
     while(client.available()) {
       msgStr += client.readStringUntil('\r');
     }
-    /*while(client.available() > 0) {
-      msgStr += client.readStringUntil('\r');
-    }*/
 
     // Verifica se é uma msg de nó Monitor
     if(msgStr.indexOf("MONITOR") > 0) {
@@ -209,7 +194,6 @@ void loop() {
         
       // Envia confirmação ACK ao módulo Monitor
       client.print("OK\r\n");
-      //server.write("OK\r\n");
 
       unsigned long timeout = millis();
       // Verifica/Aguarda conexão por 400 ms
@@ -228,9 +212,6 @@ void loop() {
         client.print("ORDER:" +
                       + nPullOrder + ":" +
                       + nextDelay + "\r\n");
-        /*server.write("ORDER:" +
-                      + nPullOrder + ":" +
-                      + nextDelay + "\r\n");*/
 
         unsigned long timeout = millis();
         bool timeoutClient = false;

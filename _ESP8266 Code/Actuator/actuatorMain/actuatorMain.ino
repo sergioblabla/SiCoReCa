@@ -1,15 +1,14 @@
-#include <WiFi.h>
+#include <ESP8266WiFi.h>
 #include <Servo.h>
 #include <Thread.h>
 #include <ThreadController.h>
 #include <string.h>
 
-// Wifi Parâmetros & Shield WiFi
-const char* serverIp = "192.168.0.177";
-const int serverPort = 23;
-const char* ssid = "SiCoReCa";            // SSID da rede Wifi
-const char* password = "A11iS0n3G0st0s0"; // Senha da rede Wifi
-int state = WL_IDLE_STATUS;               // Auxiliar para estado da rede
+// Wifi Parâmetros & Módulo ESP8266
+const char* serverIp = "192.0.0.1";
+const int serverPort = 8080;
+const char* ssid = "service-set-identifier";  // SSID da rede Wifi
+const char* password = "network-password";    // Senha da rede Wifi
 
 // Servo Motor Parâmetros
 Servo auxServo;
@@ -54,17 +53,12 @@ void pullAction() {
 void setup() {
   // put your setup code here, to run once:
 
-  // Inicializa Serial
-  Serial.begin(9600);
-  
   // Pino de Dados do Servo conectado ao pino attachedPin no Arduino
   auxServo.attach(attachedPin);
   
   // Conexão à rede WiFi
-  while(status != WL_CONNECTED) {
-    status = WiFi.begin(ssid, password);
-  }
-  
+  WiFi.begin(ssid, password);  
+
   // Inicialização da Paralelização e Controle de Thread
   pullThread.setInterval(500);
   pullThread.onRun(pullAction);
@@ -78,7 +72,7 @@ void loop() {
   parallelCtr.run();
   
   // Se conectado ao WiFi
-  if(status == WL_CONNECTED) {
+  if(WiFi.status() == WL_CONNECTED) {
       WiFiClient client;
       // Conecta-se ao cliente TCP (central)
       // Se conectado com sucesso
@@ -129,7 +123,7 @@ void loop() {
       }
   } else {
     // Se não conectado ao WiFi
-    status = WiFi.begin(ssid, password);  
+    WiFi.begin(ssid, password);  
   }
   
   delay(500);
