@@ -1,7 +1,8 @@
-#include <SPI.h>
-#include <WiFi.h>
+#include <WiShield.h>
+#include <WiServer.h>
 #include <Thread.h>
 #include <ThreadController.h>
+#include <Arduino.h>
 #include <Time.h>
 #include <string.h>
 
@@ -9,17 +10,43 @@
 #define delayProPacket 5        // Tempo que um pacote leva pra percorrer caminho do módulo monitor até o atuador
 #define delaySinceMonitored 0.5 // Tempo do momento em que o pacote é monitorado até que a msg sobre ele chega ao módulo central
 
+#define WIRELESS_MODE_INFRA	1
+#define WIRELESS_MODE_ADHOC	2
+
 // Server & Internet Parâmetros
-IPAddress myIp(192.168.0.177);            // Endereço IP para o shield/módulo
-const char mySSID[] = "SiCoReCa";         // Nome da rede para o shield/módulo
-const char myPASS[] = "A11iS0n3G0st0s0";  // Senha da rede para o shield/módulo
-int state = WL_IDLE_STATUS;               // Auxiliar para estado da rede
-WiFiServer server(23);                    // Porta para a rede
+unsigned char local_ip[] = {192,168,1,2};	// Endereço IP para o shield/módulo
+unsigned char gateway_ip[] = {192,168,0,1};	// router or gateway IP address
+unsigned char subnet_mask[] = {255,255,255,0};	// subnet mask for the local network
+const prog_char ssid[] PROGMEM = {"Casa Blabla"};		// max 32 bytes
+
+unsigned char security_type = 3;	// 0 - open; 1 - WEP; 2 - WPA; 3 - WPA2
+
+// WPA/WPA2 passphrase
+const prog_char security_passphrase[] PROGMEM = {"999999999"};	// max 64 characters
+
+// WEP 128-bit keys
+// sample HEX keys
+prog_uchar wep_keys[] PROGMEM = { 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d,	// Key 0
+				  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,	// Key 1
+				  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,	// Key 2
+				  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00	// Key 3
+				};
+
+// setup the wireless mode
+// infrastructure - connect to AP
+// adhoc - connect to another WiFi device
+unsigned char wireless_mode = WIRELESS_MODE_INFRA;
+
+unsigned char ssid_len;
+unsigned char security_passphrase_len;
+
+//int state = WL_IDLE_STATUS;               // Auxiliar para estado da rede
+// Fim dos parâmetros WiFi da rede ----------------------------------------
 
 // Cache de Msgs de Monitor
 int nMaxMsgs = 10;            // Limite máximo de Msgs no Cache Central
-float weight[nMaxMsgs];       // Cache de Pesos dos Objetos
-time_t latestMsgs[nMaxMsgs];  // Cache de Timestamps das últimas Msgs
+float weight[10];       // Cache de Pesos dos Objetos
+time_t latestMsgs[10];  // Cache de Timestamps das últimas Msgs
 time_t latestTimeStamp = -1;  // Último Timestamp tomado como base
 int nextDelay = 0;            // Delay para enviar próxima ordem
 int nPullOrder = 0;           // Número de Objetos a empurrar em sequência
@@ -120,7 +147,7 @@ void addMsgCache(char *auxStr) {
     for(i = nMaxMsgs-1; i >= 0; i--) {
       if(weight[i] == 0 && latestMsgs[i] == -1){
         weight[i] = auxWeight;
-        latestMsgs[i] = auxTimeStamp;
+        latestMsgs[i] = auxTimestamp;
         error = false;
       }
     }
@@ -145,107 +172,72 @@ void addMsgCache(char *auxStr) {
 
     // Salva última mensagem na primeira posição
     weight[0] = auxWeight;
-    latestMsgs[0] = auxTimeStamp; 
+    latestMsgs[0] = auxTimestamp; 
   }
 }
 
-void setup() {
-  // put your setup code here, to run once:
-/*
-  // Pino de Dados do Servo conectado ao pino attachedPin no Arduino
-  auxServo.attach(attachedPin);*/
-
-  // Inicializa valores na Cache
-  initializeCache();
-
-  // Inicializa Serial
-  Serial.begin(9600);
-  
-  // Verifica presença do shield WiFi
-  if (WiFi.status() == WL_NO_SHIELD) {
-    Serial.println("Shield WiFi não presente);
-    while(true);
-  }
-  
-  // Configura rede WiFi
-  WiFi.config(myIp);
-  
-  // Inicia rede WiFi
-  while(status != WL_CONNECTED) {
-    status = WiFi.begin(mySSID, myPASS);
-  }
-  server.begin();
-  
-  // Inicialização da Paralelização e Controle de Thread
-  decisionThread.setInterval(1000);
-  decisionThread.onRun(sendOrders);
-  parallelCtr.add(&calculateThread);
-}
-
-void loop() {
-  // put your main code here, to run repeatedly:
-
-  // Ativa Controle de Execução de Threads
-  parallelCtr.run();
-
-  // Escuta o meio para msgs de Clientes
-  WiFiClient client = server.available();
-
-  // Verifica conexão estabelecida por Cliente
-  if (client == true) {
-    // Recebe msg do Cliente
-    String msgStr = "";
-    while(client.available()) {
-      msgStr += client.readStringUntil('\r');
+boolean serverCallback(char* str) {
+    Serial.print(str);
+    // Check if the requested URL matches "/"
+    /*WiServer.print("hey\n");
+    if (strcmp(URL, "/") == 0) {
+        // Use WiServer's print and println functions to write out the page content
+        //WiServer.print("<html>");
+        WiServer.print("hghghjhgjhgjhg7878h87h8h8777h8hh87");
+        //WiServer.print("</html>");
+        
+        // URL was recognized
+        return true;
     }
-    /*while(client.available() > 0) {
-      msgStr += client.readStringUntil('\r');
-    }*/
-
+    // URL not found
+    return false;*/
+    String msgStr = str;
     // Verifica se é uma msg de nó Monitor
     if(msgStr.indexOf("MONITOR") > 0) {
       // Atualiza o Cache com a msg recebida de Monitor
-      addMsgCache(char *auxStr);
+      addMsgCache(str);
         
       // Envia confirmação ACK ao módulo Monitor
-      client.print("OK\r\n");
-      //server.write("OK\r\n");
-
+      WiServer.print("OK\r\n");
+      
       unsigned long timeout = millis();
       // Verifica/Aguarda conexão por 400 ms
-      while(client.available() == 0) {
+      /*while(client.available() == 0) {
         if(millis() - timeout > 400) {
           // Hora de quebrar ligação, tempo expirado
           break;
         }
-      }
+      }*/
         
-      client.stop();    // Interrompe conexão com cliente
+      return true;
+      //client.stop();    // Interrompe conexão com cliente
     } else {
+    //if(msgStr.indexOf("/") > 0) {
+      //Serial.print("2");
       // Verifica se há Cache de Ordem no momento
+      //WiServer.print("ORDER:" + String(nPullOrder) + ":" + String(nextDelay) + "\r\n");
       if(nPullOrder != 0 && nextDelay != 0) {
         // Envia Ordem à Atuador
-        client.print("ORDER:" +
-                      + nPullOrder + ":" +
-                      + nextDelay + "\r\n");
+        WiServer.print("ORDER:" + String(nPullOrder) + ":" + String(nextDelay) + "\r\n");
+        //WiServer.print("ORDER:" + /*String(nPullOrder)*/"" + ":" + /*String(nextDelay)*/"" + "\r\n");
         /*server.write("ORDER:" +
                       + nPullOrder + ":" +
                       + nextDelay + "\r\n");*/
 
-        unsigned long timeout = millis();
-        bool timeoutClient = false;
+        /*unsigned long timeout = millis();
+        bool timeoutClient = false;*/
         // Verifica/Aguarda conexão por 400 ms
-        while(client.available() == 0 &&
+        /*while(client.available() == 0 &&
                 timeoutClient == false) {
           if(millis() - timeout > 400) {
             // Hora de quebrar ligação, tempo expirado
             client.stop();
             timeoutClient = true;
           }
-        }
+        }*/
       
         // Se não houve problema de conexão com o módulo central
-        if(!timeoutClient) {
+        /*if(!timeoutClient) {
           // Prepara resposta de feedback do módulo central
           String ackStr = "";
           while(client.available()) {
@@ -259,12 +251,71 @@ void loop() {
             nPullOrder = nextDelay = 0;    
             latestTimeStamp = -1;
           }
-        }
+        }*/
       
-        client.stop();    // Interrompe conexão com cliente
+        //client.stop();    // Interrompe conexão com cliente
+      } else {
+        WiServer.print("Nothing to Show\r\n");
       }
+      
+      return true;
     }
+    
+    /*WiServer.print("hey\n");
+    if (strcmp(URL, "/") == 0) {
+        // Use WiServer's print and println functions to write out the page content
+        //WiServer.print("<html>");
+        WiServer.print("hghghjhgjhgjhg7878h87h8h8777h8hh87");
+        //WiServer.print("</html>");
+        
+        // URL was recognized
+        return true;
+    }*/
+    // URL not found
+    return false;
+}
+
+void setup() {
+  // put your setup code here, to run once:
+/*
+  // Pino de Dados do Servo conectado ao pino attachedPin no Arduino
+  auxServo.attach(attachedPin);*/
+
+  // Inicializa valores na Cache
+  initializeCache();
+
+  // Inicializa Serial
+  Serial.begin(57600);
+  
+  // Verifica presença do shield WiFi
+  /*if (WiFi.status() == WL_NO_SHIELD) {
+    Serial.println("Shield WiFi não presente);
+    while(true);
   }
   
-  delay(500);
+  // Configura rede WiFi
+  WiFi.config(myIp);
+  
+  // Inicia rede WiFi
+  while(status != WL_CONNECTED) {
+    status = WiFi.begin(mySSID, myPASS);
+  }
+  server.begin();*/
+  WiServer.init(serverCallback);
+  WiServer.enableVerboseMode(true);
+  
+  // Inicialização da Paralelização e Controle de Thread
+  decisionThread.setInterval(1000);
+  decisionThread.onRun(calculateOrders);
+  parallelCtr.add(&decisionThread);
+}
+
+void loop() {
+  // put your main code here, to run repeatedly:
+
+  // Ativa Controle de Execução de Threads
+  parallelCtr.run();
+  WiServer.server_task();
+
+  //delay(500);
 }
